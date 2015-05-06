@@ -97,5 +97,52 @@ object List { // `List` companion object. Contains functions for creating and wo
   def reverse[A](l: List[A]): List[A] =
     foldLeft(l, Nil:List[A])( (acc, a) => Cons(a, acc) )
 
-  def map[A,B](l: List[A])(f: A => B): List[B] = sys.error("todo")
+  def appendWithFoldRight[A](l: List[A], r: List[A]): List[A] =
+    foldRight(l, r)( (i, acc) => Cons(i, acc))
+
+  def concat[A](l: List[List[A]]): List[A] =
+    foldLeft(l, List[A]())((acc, i) => appendWithFoldRight(acc, i))
+
+  def add1(l: List[Int]): List[Int] =
+    foldRight(l, Nil:List[Int])((i,acc) => Cons(i+1, acc))
+
+  def doublesToStrings(l: List[Double]): List[String] =
+    foldRight(l, Nil:List[String])((i, acc) => Cons(i.toString, acc))
+
+  def map[A,B](l: List[A])(f: A => B): List[B] =
+    foldRight(l, Nil:List[B])((i,acc) => Cons(f(i), acc))
+
+  def filter[A](as: List[A])(f: A => Boolean): List[A] =
+    foldRight(as, Nil:List[A])((i, acc) => if(f(i)) Cons(i,acc) else acc)
+
+  def flatMap[A,B](as: List[A])(f: A => List[B]): List[B] =
+    foldRight(as, Nil:List[B])((i, acc) => append(f(i), acc))
+
+  def filterWithFlatMap[A](as: List[A])(f: A => Boolean): List[A] =
+    flatMap(as)(i => if(f(i)) List(i) else Nil)
+
+  def sumElements(as: List[Int], bs: List[Int]): List[Int] = (as, bs) match {
+    case (_, Nil) => Nil
+    case (Nil, _) => Nil
+    case (Cons(ha,ta), Cons(hb, tb)) => Cons(ha+hb, sumElements(ta, tb))
+  }
+
+  def zipWith[A,B,C](as: List[A], bs: List[B])(op: (A,B) => C): List[C] = (as, bs) match {
+    case (_, Nil) => Nil
+    case (Nil, _) => Nil
+    case (Cons(ha,ta), Cons(hb, tb)) => Cons(op(ha,hb), zipWith(ta, tb)(op))
+  }
+
+  def startsWith[A](l: List[A], prefix: List[A]): Boolean = (l, prefix) match {
+    case (_, Nil) => true
+    case (Cons(lh, lt), Cons(prefH, prefT)) if lh == prefH => startsWith(lt, prefT)
+    case _ => false
+  }
+
+  def hasSubsequence[A](sup: List[A], sub: List[A]): Boolean = sup match {
+    case Nil => sub == Nil
+    case _ if startsWith(sup, sub) => true
+    case Cons(_, t) => hasSubsequence(t, sub)
+  }
+
 }
