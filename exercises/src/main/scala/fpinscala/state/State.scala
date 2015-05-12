@@ -92,16 +92,42 @@ object RNG {
     sequence(List.fill(count)(randInt))
   }
 
-  def flatMap[A,B](f: Rand[A])(g: A => Rand[B]): Rand[B] = ???
+  def flatMap[A,B](f: Rand[A])(g: A => Rand[B]): Rand[B] = { rng =>
+    val (a,rng2) = f(rng)
+    g(a)(rng2)
+  }
+
+  def nonNegativeLessThan(n: Int): Rand[Int] = flatMap(nonNegativeInt) {
+    case i =>
+      val mod = i % n
+      if (i + (n - 1) - mod >= 0) unit(mod)
+      else nonNegativeLessThan(n)
+  }
+
+  def mapWithFlatMap[A,B](s: Rand[A])(f: A => B): Rand[B] =
+    flatMap(s)(i => unit(f(i)))
+
+  def map2WithFlatMap[A, B, C](ra: Rand[A], rb: Rand[B])(f: (A, B) => C): Rand[C] =
+    flatMap(ra) {
+      case a => map(rb)(b => f(a, b))
+    }
+
 }
 
 case class State[S,+A](run: S => (A, S)) {
+  import State._
+
   def map[B](f: A => B): State[S, B] =
-    sys.error("todo")
+    flatMap(a => unit(f(a)))
+
   def map2[B,C](sb: State[S, B])(f: (A, B) => C): State[S, C] =
-    sys.error("todo")
-  def flatMap[B](f: A => State[S, B]): State[S, B] =
-    sys.error("todo")
+    flatMap(a => sb.map(b => f(a,b)))
+
+  def flatMap[B](f: A => State[S, B]): State[S, B] = State(s => {
+    val (a, newS) = run(s)
+    f(a).run(newS)
+  })
+
 }
 
 sealed trait Input
@@ -112,5 +138,23 @@ case class Machine(locked: Boolean, candies: Int, coins: Int)
 
 object State {
   type Rand[A] = State[RNG, A]
-  def simulateMachine(inputs: List[Input]): State[Machine, (Int, Int)] = ???
+
+  def unit[S, A](a: A): State[S, A] = State(s => (a, s))
+
+  def sequence[S, A](sas: List[State[S, A]]): State[S, List[A]] = {
+    sas.foldRight(unit[S,List[A]](List())){
+      case (i,acc) => i.map2(acc)((a,b) => a::b)
+    }
+  }
+
+  def applyInput(input: Input, m: Machine): Machine = (m,input) match {
+    case (Machine(_,candies,coins),Coin) if candies > 0 => Machine(false, candies,coins+1)
+    case (Machine(false,candies,coins),Turn) => Machine(true,candies-1,coins)
+    case (m@Machine(_,_,_),_) => m
+  }
+
+  def simulateMachine(inputs: List[Input]): State[Machine, (Int, Int)] = State { m =>
+    val finalM = inputs.foldLeft(m)((s, i) => applyInput(i,s))
+    ((finalM.candies,finalM.coins),finalM)
+  }
 }
